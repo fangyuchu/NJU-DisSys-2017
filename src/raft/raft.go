@@ -17,13 +17,15 @@ package raft
 //   in the same server.
 //
 
-import "sync"
+import (
+	"bytes"
+	"encoding/gob"
+	"sync"
+)
 import "labrpc"
 
 // import "bytes"
 // import "encoding/gob"
-
-
 
 //
 // as each Raft peer becomes aware that successive log entries are
@@ -46,11 +48,30 @@ type Raft struct {
 	persister *Persister
 	me        int // index into peers[]
 
+	/******************************************************************************************************************/
+	//persistent state
+	currentTerm int
+	votedfor    int //-1表示未投票
+	logs        []*Log
+
+	isLeader bool
+
+	/******************************************************************************************************************/
+
 	// Your data here.
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
 }
+
+/******************************************************************************************************************/
+type Log struct {
+	index int
+	term  int
+	load  string
+}
+
+/******************************************************************************************************************/
 
 // return currentTerm and whether this server
 // believes it is the leader.
@@ -75,7 +96,23 @@ func (rf *Raft) persist() {
 	// e.Encode(rf.xxx)
 	// e.Encode(rf.yyy)
 	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	//rf.persister.SaveRaftState(data)
+
+	/******************************************************************************************************************/
+	w := new(bytes.Buffer)
+	e := gob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedfor)
+	var logNum = len(rf.logs)
+	e.Encode(logNum)
+	for i := 0; i < logNum; i = i + 1 {
+		e.Encode(rf.logs[i].term)
+		e.Encode(rf.logs[i].index)
+		e.Encode(rf.logs[i].load)
+	}
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
+	/******************************************************************************************************************/
 }
 
 //
@@ -88,23 +125,46 @@ func (rf *Raft) readPersist(data []byte) {
 	// d := gob.NewDecoder(r)
 	// d.Decode(&rf.xxx)
 	// d.Decode(&rf.yyy)
+	/******************************************************************************************************************/
+	r := bytes.NewBuffer(data)
+	d := gob.NewDecoder(r)
+	d.Decode(rf.currentTerm)
+	d.Decode(rf.votedfor)
+	var num int
+	d.Decode(num)
+	for i := 0; i < num; i++ {
+		var term, index int
+		var load string
+		d.Decode(term)
+		d.Decode(index)
+		d.Decode(load)
+		rf.logs = append(rf.logs, &Log{term: term, index: index, load: load})
+	}
+
+	/******************************************************************************************************************/
 }
-
-
-
 
 //
 // example RequestVote RPC arguments structure.
 //
 type RequestVoteArgs struct {
-	// Your data here.
+	/******************************************************************************************************************/
+	term         int
+	candidateId  int
+	lastLogIndex int
+	lastLogTerm  int
+	reply        chan RequestVoteReply
+	/******************************************************************************************************************/
 }
 
 //
 // example RequestVote RPC reply structure.
 //
 type RequestVoteReply struct {
-	// Your data here.
+	/******************************************************************************************************************/
+	currentTerm int
+	voteGranted bool
+	/******************************************************************************************************************/
 }
 
 //
@@ -112,6 +172,25 @@ type RequestVoteReply struct {
 //
 func (rf *Raft) RequestVote(args RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here.
+	/******************************************************************************************************************/
+	//TODO:需不需要考虑rf此时已经是leader的情况？
+	if args.term < rf.currentTerm {
+		reply.currentTerm = rf.currentTerm
+		reply.voteGranted = false
+		return
+	}
+	if rf.votedfor == -1 {
+		reply.voteGranted = false
+	}
+	if args.lastLogTerm < rf.logs[len(rf.logs)-1].term {
+		reply.voteGranted = false
+		return
+	} else if args.lastLogTerm == rf.logs[len(rf.logs)-1].term && args.lastLogIndex < rf.logs[len(rf.logs)-1].index {
+		reply.voteGranted = false
+		return
+	}
+	reply.voteGranted = true
+	/******************************************************************************************************************/
 }
 
 //
@@ -136,7 +215,6 @@ func (rf *Raft) sendRequestVote(server int, args RequestVoteArgs, reply *Request
 	return ok
 }
 
-
 //
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
@@ -154,7 +232,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	index := -1
 	term := -1
 	isLeader := true
-
 
 	return index, term, isLeader
 }
@@ -190,8 +267,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// Your initialization code here.
 
 	// initialize from state persisted before a crash
-	rf.readPersist(persister.ReadRaftState())
 
+	//rf.readPersist(persister.ReadRaftState())
 
 	return rf
 }

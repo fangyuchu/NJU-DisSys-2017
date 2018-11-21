@@ -8,7 +8,9 @@ package raft
 // test with the original before submitting.
 //
 
-import "testing"
+import (
+	"testing"
+)
 import "fmt"
 import "time"
 import "math/rand"
@@ -927,3 +929,77 @@ func TestReliableChurn(t *testing.T) {
 func TestUnreliableChurn(t *testing.T) {
 	internalChurn(t, true)
 }
+
+type TestStruct struct {
+	data int
+}
+
+func TestEncode(t *testing.T) {
+	//检查通信
+	servers := 3
+	cfg := make_config(t, servers, false)
+	defer cfg.cleanup()
+
+	fmt.Printf("Test: initial election ...\n")
+	var rv = RequestVoteArgs{}
+	var rvr = RequestVoteReply{100, false}
+	// is a leader elected?
+	time.Sleep(500 * time.Millisecond)
+	go cfg.rafts[1].sendRequestVote(0, rv, &rvr)
+	time.Sleep(500 * time.Millisecond)
+	fmt.Println(rvr.voteGranted)
+
+	//encode和decode的测试
+	//w := new(bytes.Buffer)
+	//e := gob.NewEncoder(w)
+	//var balance = [5]float32{1000.0, 2.0, 3.4, 7.0, 50.0}
+	//fmt.Println(len(balance))
+	//e.Encode(balance[0])
+	//e.Encode(balance[1])
+	//e.Encode("s")
+	//e.Encode(3)
+	//r := bytes.NewBuffer(w.Bytes())
+	//d := gob.NewDecoder(r)
+	//const num=5
+	//var a [num]float32
+	//var b string
+	//var c int
+	//
+	//d.Decode(&a[0])
+	//d.Decode(&a[1])
+	//d.Decode(&b)
+	//d.Decode(&c)
+
+	//切片测试
+	//	var a []int
+	//	a=append(a, 1)
+	//	fmt.Println(&a)
+	//	a=append(a,2)
+	//	fmt.Println(&a)
+	//	fmt.Println(a)
+	//	var b []*TestStruct
+	//	b=append(b,&TestStruct{2} )
+	//	b=append(b,&TestStruct{3} )
+
+	//结构体转化为[]byte
+	//	var testStruct = &TestStructTobytes{100}
+	//	Len := unsafe.Sizeof(*testStruct)
+	//	fmt.Println(reflect.TypeOf(testStruct).String())
+	//	fmt.Println(Len)
+	//	testBytes := &SliceMock{
+	//		addr: uintptr(unsafe.Pointer(testStruct)),
+	//		cap:  int(Len),
+	//		len:  int(Len),
+	//	}
+	//	data := *(*[]byte)(unsafe.Pointer(testBytes))
+	//	fmt.Println("[]byte is : ", data)
+
+	//测试结构体函数的传递
+	//	var a=TestStruct{5}
+	//	s(&a)
+	//	fmt.Println(a.data)
+}
+
+//func s(test *TestStruct)  {
+//	test.data=100
+//}
