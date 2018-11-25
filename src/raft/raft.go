@@ -115,6 +115,7 @@ type AppendEntries struct {
 	PrevLogTerm  int
 	Logs         []*Log
 	LeaderCommit int
+	Success      chan bool //收到表示得到server回复，其中true表示server接收了，false表示server拒绝了
 }
 type AppendEntriesReply struct {
 	Term    int
@@ -203,9 +204,7 @@ func (rf *Raft) readPersist(data []byte) {
 func (rf *Raft) RequestVote(args RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here.
 	/******************************************************************************************************************/
-	fmt.Println(rf.me, "开始给", args.CandidateId, "投票")
-	fmt.Print("此时，投票者", rf.me, "的term为", rf.CurrentTerm)
-	fmt.Println("，而候选者", args.CandidateId, "的term为", args.Term)
+	fmt.Println(rf.me, "开始给", args.CandidateId, "投票\n", "此时，投票者", rf.me, "的term为", rf.CurrentTerm, "，而候选者", args.CandidateId, "的term为", args.Term)
 	if args.Term < rf.CurrentTerm {
 		//candidate的term落后,拒绝
 		reply.CurrentTerm = rf.CurrentTerm
@@ -284,6 +283,11 @@ func (rf *Raft) sendRequestVote(server int, args RequestVoteArgs, reply *Request
 
 func (rf *Raft) sendRequestReply(server int, args AppendEntries, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.Reply", args, reply)
+	if reply.Success == 2 {
+		args.Success <- true
+	} else if reply.Success == 1 {
+		args.Success <- false
+	}
 	return ok
 }
 func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
@@ -291,7 +295,7 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 	rf.ReqFromLeader <- true
 	if args.Term < rf.CurrentTerm {
 		//leader的term小，拒绝
-		fmt.Println(rf.me, "拒绝了", args.LeaderID, "的心跳包")
+		fmt.Println(rf.me, "的term为", rf.CurrentTerm, "，因此拒绝了", args.LeaderID, "的term为", args.Term, "的心跳包")
 		reply.Success = 1
 		reply.Term = rf.CurrentTerm
 		return
@@ -433,60 +437,68 @@ func (rf *Raft) checkIFElected(reply []RequestVoteReply, numPeers int) {
 	}
 }
 
-//func(rf *Raft)checkVoteResult(reply *RequestVoteReply,yes *int,no *int){
-//	fmt.Println(rf.me,"wait for one reply")
-//	<-reply.Voted
-//	fmt.Println(rf.me,"receive one reply")
-//	if reply.VoteGranted==2{
-//		*yes++
-//	}else if reply.VoteGranted==1{
-//		*no++
-//		if reply.CurrentTerm > rf.CurrentTerm {
-//			//candidate发现自己的term较小，则更新term并退回至follower
-//			rf.CurrentTerm = reply.CurrentTerm
-//			rf.BecomeFollower()
-//			rf.VoteResultComing<-true
-//			return
-//		}
-//		if reply.CurrentLeader && reply.CurrentTerm == rf.CurrentTerm {
-//			//已有leader存在，且term不比自己小
-//			rf.BecomeFollower()
-//			rf.VoteResultComing<-true
-//			return
-//		}
-//	}
-//
-//}
 func (rf *Raft) startWorking() {
 	for true {
 		if rf.Identity == 2 {
 			//leader，发心跳包
 			//暂定50ms发送一次
-			time.Sleep(25 * time.Millisecond)
-			reply := make([]AppendEntriesReply, len(rf.peers))
-			for server := 0; server < len(rf.peers); server++ {
-				//fmt.Println(rf.me,"给",server,"发心跳包")
-				currentTerm := rf.CurrentTerm
-				leaderId := rf.me
-				prevLogIndex := rf.Logs[len(rf.Logs)-1].Index
-				prevLogTerm := rf.Logs[len(rf.Logs)-1].Term
-				var l []*Log
-				l = nil
-				leaderCommit := rf.CommitIndex
-				args := AppendEntries{currentTerm, leaderId, prevLogIndex,
-					prevLogTerm, l, leaderCommit}
-				go rf.sendRequestReply(server, args, &reply[server])
-			}
-			//TODO: wait until receiving all replys?
-			time.Sleep(25 * time.Millisecond)
-			for server := 0; server < len(rf.peers); server++ {
-				if reply[server].Success == 1 {
-					//有follower的term更大，leader退回到follower状态
-					fmt.Println("leader", rf.me, "发现自己的term过小，退回到follower")
-					rf.CurrentTerm = reply[server].Term
-					rf.BecomeFollower()
+			//TODO:这样似乎一次只能给所有的服务器发送相同的指令？
+			go func() {
+				var agreeNum int //num of servers agreed to append the entry
+				mostAgreed := make(chan bool)
+				numpeers := len(rf.peers)
+				reply := make([]AppendEntriesReply, len(rf.peers))
+				args := make([]AppendEntries, len(rf.peers))
+				for server := 0; server < numpeers; server++ {
+					//TODO: same request for all server
+					currentTerm := rf.CurrentTerm
+					leaderId := rf.me
+					prevLogIndex := rf.Logs[len(rf.Logs)-1].Index
+					prevLogTerm := rf.Logs[len(rf.Logs)-1].Term
+					var l []*Log
+					l = nil
+					leaderCommit := rf.CommitIndex
+					args[server] = AppendEntries{currentTerm, leaderId, prevLogIndex,
+						prevLogTerm, l, leaderCommit, make(chan bool, 1)}
 				}
-			}
+				for server := 0; server < numpeers; server++ {
+					go rf.sendRequestReply(server, args[server], &reply[server])
+				}
+				for server := 0; server < numpeers; server++ {
+					go func(i int) {
+						var success bool
+						select {
+						case success = <-args[i].Success:
+							if success == false {
+								//有follower的term更大，leader退回到follower状态
+								//TODO:一个server被隔绝后疯狂加term，之后恢复了，这时怎么办？
+								fmt.Println("leader", rf.me, "发现自己的term过小，退回到follower")
+								rf.CurrentTerm = reply[i].Term
+								rf.BecomeFollower()
+								mostAgreed <- false
+							} else {
+								agreeNum++
+							}
+							if agreeNum >= (int)(numpeers/2)+1 {
+								mostAgreed <- true
+							}
+						case <-time.After(25 * time.Millisecond):
+						}
+					}(server)
+				}
+				select {
+				case commitEntry := <-mostAgreed:
+					if commitEntry {
+						//TODO:commit entry
+					} else {
+						//TODO: do not commit the entry
+					}
+				case <-time.After(1 * time.Second):
+					//长时间未收到大多数服务器的消息
+					return
+				}
+			}()
+			time.Sleep(50 * time.Millisecond)
 		} else if rf.Identity == 1 {
 			//candidate,竞选
 			fmt.Println(rf.me, "开始竞选")
