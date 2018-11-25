@@ -292,7 +292,9 @@ func (rf *Raft) sendRequestReply(server int, args AppendEntries, reply *AppendEn
 }
 func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 	//follower收到leader发来的append entry请求后进行回复
-	rf.ReqFromLeader <- true
+	if rf.Identity == 0 {
+		rf.ReqFromLeader <- true
+	}
 	if args.Term < rf.CurrentTerm {
 		//leader的term小，拒绝
 		fmt.Println(rf.me, "的term为", rf.CurrentTerm, "，因此拒绝了", args.LeaderID, "的term为", args.Term, "的心跳包")
@@ -388,6 +390,11 @@ func (rf *Raft) startElect() {
 	numPeers = len(rf.peers)
 	reply := make([]RequestVoteReply, numPeers)
 	for i := 0; i < numPeers; i++ {
+		//默认自己投给自己
+		if i == rf.me {
+			rf.Votedfor = rf.me
+			continue
+		}
 		Term := rf.CurrentTerm
 		CandidateId := rf.me
 		LastLogIndex := rf.Logs[len(rf.Logs)-1].Index
@@ -396,7 +403,6 @@ func (rf *Raft) startElect() {
 		go rf.sendRequestVote(i, req, &reply[i])
 	}
 	go rf.checkIFElected(reply, numPeers)
-
 	select {
 	case <-rf.VoteResultComing:
 		return
@@ -405,14 +411,11 @@ func (rf *Raft) startElect() {
 		rf.BecomeCandidate() //重置各项指标
 	}
 }
+
 func (rf *Raft) checkIFElected(reply []RequestVoteReply, numPeers int) {
 	var yes, no int
-	var time int
 	for <-rf.Voted {
-		time++
-		//fmt.Print(rf.me," result:",time,"       ")
 		for i := 0; i < numPeers; i++ {
-			//fmt.Print(reply[i].VoteGranted)
 			if reply[i].VoteGranted == 2 {
 				yes++
 			} else if reply[i].VoteGranted == 1 {
@@ -425,8 +428,9 @@ func (rf *Raft) checkIFElected(reply []RequestVoteReply, numPeers int) {
 			rf.VoteResultComing <- true
 			return
 		}
-		if yes >= (int)(numPeers/2)+1 {
+		if yes >= (int)(numPeers/2) {
 			//竞选成功
+			//默认包括自己
 			fmt.Println(rf.me, "成为leader")
 			rf.BecomeLeader()
 			rf.VoteResultComing <- true
@@ -437,67 +441,75 @@ func (rf *Raft) checkIFElected(reply []RequestVoteReply, numPeers int) {
 	}
 }
 
+func (rf *Raft) DoAsLeader() {
+	//TODO:这样似乎一次只能给所有的服务器发送相同的指令？
+	var agreeNum int //num of servers agreed to append the entry
+	mostAgreed := make(chan bool)
+	numPeers := len(rf.peers)
+	reply := make([]AppendEntriesReply, len(rf.peers))
+	args := make([]AppendEntries, len(rf.peers))
+	for server := 0; server < numPeers; server++ {
+		//TODO: same request for all server
+		currentTerm := rf.CurrentTerm
+		leaderId := rf.me
+		prevLogIndex := rf.Logs[len(rf.Logs)-1].Index
+		prevLogTerm := rf.Logs[len(rf.Logs)-1].Term
+		var l []*Log
+		l = nil
+		leaderCommit := rf.CommitIndex
+		args[server] = AppendEntries{currentTerm, leaderId, prevLogIndex,
+			prevLogTerm, l, leaderCommit, make(chan bool, 1)}
+	}
+	for server := 0; server < numPeers; server++ {
+		if server == rf.me {
+			continue
+		}
+		go rf.sendRequestReply(server, args[server], &reply[server])
+	}
+	for server := 0; server < numPeers; server++ {
+		if server == rf.me {
+			continue
+		}
+		go func(i int) {
+			var success bool
+			select {
+			case success = <-args[i].Success:
+				if success == false {
+					//有follower的term更大，leader退回到follower状态
+					//TODO:一个server被隔绝后疯狂加term，之后恢复了，这时怎么办？
+					fmt.Println("leader", rf.me, "发现自己的term过小，退回到follower")
+					rf.CurrentTerm = reply[i].Term
+					rf.BecomeFollower()
+					mostAgreed <- false
+				} else {
+					agreeNum++
+				}
+				if agreeNum >= (int)(numPeers/2) {
+					mostAgreed <- true
+				}
+			case <-time.After(25 * time.Millisecond):
+			}
+		}(server)
+	}
+	select {
+	case commitEntry := <-mostAgreed:
+		if commitEntry {
+			//TODO:commit entry
+		} else {
+			//TODO: do not commit the entry
+		}
+	case <-time.After(1 * time.Second):
+		//长时间未收到大多数服务器的消息
+		return
+	}
+}
+
 func (rf *Raft) startWorking() {
 	for true {
 		if rf.Identity == 2 {
 			//leader，发心跳包
 			//暂定50ms发送一次
-			//TODO:这样似乎一次只能给所有的服务器发送相同的指令？
-			go func() {
-				var agreeNum int //num of servers agreed to append the entry
-				mostAgreed := make(chan bool)
-				numpeers := len(rf.peers)
-				reply := make([]AppendEntriesReply, len(rf.peers))
-				args := make([]AppendEntries, len(rf.peers))
-				for server := 0; server < numpeers; server++ {
-					//TODO: same request for all server
-					currentTerm := rf.CurrentTerm
-					leaderId := rf.me
-					prevLogIndex := rf.Logs[len(rf.Logs)-1].Index
-					prevLogTerm := rf.Logs[len(rf.Logs)-1].Term
-					var l []*Log
-					l = nil
-					leaderCommit := rf.CommitIndex
-					args[server] = AppendEntries{currentTerm, leaderId, prevLogIndex,
-						prevLogTerm, l, leaderCommit, make(chan bool, 1)}
-				}
-				for server := 0; server < numpeers; server++ {
-					go rf.sendRequestReply(server, args[server], &reply[server])
-				}
-				for server := 0; server < numpeers; server++ {
-					go func(i int) {
-						var success bool
-						select {
-						case success = <-args[i].Success:
-							if success == false {
-								//有follower的term更大，leader退回到follower状态
-								//TODO:一个server被隔绝后疯狂加term，之后恢复了，这时怎么办？
-								fmt.Println("leader", rf.me, "发现自己的term过小，退回到follower")
-								rf.CurrentTerm = reply[i].Term
-								rf.BecomeFollower()
-								mostAgreed <- false
-							} else {
-								agreeNum++
-							}
-							if agreeNum >= (int)(numpeers/2)+1 {
-								mostAgreed <- true
-							}
-						case <-time.After(25 * time.Millisecond):
-						}
-					}(server)
-				}
-				select {
-				case commitEntry := <-mostAgreed:
-					if commitEntry {
-						//TODO:commit entry
-					} else {
-						//TODO: do not commit the entry
-					}
-				case <-time.After(1 * time.Second):
-					//长时间未收到大多数服务器的消息
-					return
-				}
-			}()
+			go rf.DoAsLeader()
 			time.Sleep(50 * time.Millisecond)
 		} else if rf.Identity == 1 {
 			//candidate,竞选

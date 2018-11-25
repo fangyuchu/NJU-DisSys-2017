@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="558ac743-39b1-4d9c-ab46-81873a9bc231" name="Default" comment="加入了一些代码">
+    <list default="true" id="558ac743-39b1-4d9c-ab46-81873a9bc231" name="Default" comment="能够处理一批次中大多数server同意的情况。但只能像所有服务器发送相同的信息">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/raft/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/raft/raft.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/raft.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/raft/test_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/test_test.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -44,14 +42,14 @@
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="go" value="8654" />
-          <entry key="txt" value="40" />
+          <entry key="go" value="9642" />
+          <entry key="txt" value="108" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Go" value="8654" />
-          <entry key="PLAIN_TEXT" value="40" />
+          <entry key="Go" value="9642" />
+          <entry key="PLAIN_TEXT" value="108" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.go.postfix.template.usages.trigger">
@@ -67,8 +65,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/raft/raft.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="120">
-              <caret line="478" column="44" selection-start-line="478" selection-start-column="44" selection-end-line="478" selection-end-column="44" />
+            <state relative-caret-position="-1552">
+              <caret line="387" column="8" lean-forward="true" selection-start-line="387" selection-start-column="8" selection-end-line="387" selection-end-column="8" />
               <folding>
                 <element signature="e#591#678#0" expanded="true" />
               </folding>
@@ -77,19 +75,10 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file:///usr/go/src/runtime/panic.go">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="235">
-              <caret line="680" selection-start-line="680" selection-end-line="680" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/raft/config.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="909">
-              <caret line="287" selection-start-line="287" selection-end-line="287" />
+            <state relative-caret-position="292">
+              <caret line="268" column="17" lean-forward="true" selection-start-line="268" selection-start-column="17" selection-end-line="268" selection-end-column="17" />
               <folding>
                 <element signature="e#230#406#0" expanded="true" />
               </folding>
@@ -122,8 +111,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>Election</find>
-      <find>log</find>
       <find>encode</find>
       <find>decode</find>
       <find>start</find>
@@ -141,7 +128,6 @@
       <find>Sleep</find>
       <find>GetState</find>
       <find>candidateId</find>
-      <find>i</find>
       <find>Me</find>
       <find>me</find>
       <find>rf.Identity=</find>
@@ -152,16 +138,21 @@
       <find>reply.Voted</find>
       <find>rf.BecomeFollower()</find>
       <find>//reply.Voted&lt;-true</find>
+      <find>RequestIncoming</find>
+      <find>i</find>
+      <find>len(rf.peers)</find>
     </findStrings>
     <replaceStrings>
       <replace>VoteGranted</replace>
       <replace>CurrentTerm</replace>
       <replace>CandidateId</replace>
-      <replace>server</replace>
       <replace>me</replace>
       <replace>Me</replace>
       <replace>Load</replace>
       <replace>//reply.Voted</replace>
+      <replace>ReqFromLeader</replace>
+      <replace>server</replace>
+      <replace>numpeers</replace>
     </replaceStrings>
   </component>
   <component name="GOROOT" path="/usr/go" />
@@ -183,8 +174,8 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/src/raft/config.go" />
         <option value="$PROJECT_DIR$/src/raft/test_test.go" />
+        <option value="$PROJECT_DIR$/src/raft/config.go" />
         <option value="$PROJECT_DIR$/src/raft/raft.go" />
       </list>
     </option>
@@ -281,7 +272,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Go Test.TestReElection in raft">
+  <component name="RunManager" selected="Go Test.TestInitialElection in raft">
     <configuration default="true" type="Applet" factoryName="Applet">
       <option name="HTML_USED" value="false" />
       <option name="WIDTH" value="400" />
@@ -430,8 +421,8 @@
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Test.TestReElection in raft" />
         <item itemvalue="Go Test.TestInitialElection in raft" />
+        <item itemvalue="Go Test.TestReElection in raft" />
         <item itemvalue="Go Test.TestEncode in raft" />
       </list>
     </recent_temporary>
@@ -447,36 +438,45 @@
     <servers />
   </component>
   <component name="TestHistory">
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 05m 19s.xml">
-      <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
-    </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 07m 55s.xml">
-      <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
-    </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 20m 10s.xml">
-      <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
-    </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 24m 42s.xml">
-      <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
-    </history-entry>
-    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 00h 26m 34s.xml">
+    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 02h 26m 25s.xml">
       <configuration name="TestInitialElection in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 27m 08s.xml">
+    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 02h 26m 46s.xml">
+      <configuration name="TestInitialElection in raft" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 02h 27m 39s.xml">
+      <configuration name="TestInitialElection in raft" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestReElection_in_raft - 2018.11.26 at 02h 28m 15s.xml">
       <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 28m 21s.xml">
+    <history-entry file="TestReElection_in_raft - 2018.11.26 at 02h 29m 59s.xml">
       <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 33m 01s.xml">
+    <history-entry file="TestReElection_in_raft - 2018.11.26 at 02h 30m 06s.xml">
       <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 33m 20s.xml">
+    <history-entry file="TestReElection_in_raft - 2018.11.26 at 02h 30m 17s.xml">
       <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestReElection_in_raft - 2018.11.26 at 00h 46m 47s.xml">
-      <configuration name="TestReElection in raft" configurationId="GoTestRunConfiguration" />
+    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 02h 30m 25s.xml">
+      <configuration name="TestInitialElection in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
+    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 02h 30m 29s.xml">
+      <configuration name="TestInitialElection in raft" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestInitialElection_in_raft - 2018.11.26 at 02h 30m 33s.xml">
+      <configuration name="TestInitialElection in raft" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+  </component>
+  <component name="TodoView" selected-index="4">
+    <todo-panel id="selected-file">
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
+    <todo-panel id="all">
+      <are-packages-shown value="true" />
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="0" width="1920" height="1030" extended-state="0" />
@@ -496,7 +496,7 @@
       <window_info anchor="bottom" id="Debug" order="3" weight="0.36455983" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info anchor="bottom" id="TODO" order="6" />
+      <window_info anchor="bottom" id="TODO" order="6" weight="0.3295711" />
       <window_info anchor="bottom" id="Terminal" order="7" />
       <window_info anchor="bottom" id="Event Log" order="8" side_tool="true" />
       <window_info anchor="bottom" id="Version Control" order="9" show_stripe_button="false" />
@@ -522,29 +522,24 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="加入了一些代码" />
-    <option name="LAST_COMMIT_MESSAGE" value="加入了一些代码" />
+    <MESSAGE value="能够完成选举。leader处理回执的方式有问题" />
+    <MESSAGE value="能够处理一批次中大多数server同意的情况。但只能像所有服务器发送相同的信息" />
+    <option name="LAST_COMMIT_MESSAGE" value="能够处理一批次中大多数server同意的情况。但只能像所有服务器发送相同的信息" />
   </component>
   <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/src/raft/raft.go</url>
-          <line>424</line>
-          <properties />
-          <option name="timeStamp" value="82" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
     <watches-manager>
       <configuration name="GoTestRunConfiguration">
-        <watch expression="rf.Votedfor" language="go" />
-        <watch expression="rf.Me" language="go" />
-        <watch expression="(int)(numPeers/2)+1" language="go" />
+        <watch expression="len(rf.peers)" language="go" />
       </configuration>
     </watches-manager>
   </component>
   <component name="debuggerHistoryManager">
     <expressions id="breakpointCondition">
+      <expression>
+        <expression-string>i==3</expression-string>
+        <language-id>go</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
       <expression>
         <expression-string>time==3||time==2</expression-string>
         <language-id>go</language-id>
@@ -562,6 +557,11 @@
       </expression>
     </expressions>
     <expressions id="watch">
+      <expression>
+        <expression-string>len(rf.peers)</expression-string>
+        <language-id>go</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
       <expression>
         <expression-string>(int)(numPeers/2)+1</expression-string>
         <language-id>go</language-id>
@@ -714,10 +714,17 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/src/raft/test_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="323">
+          <caret line="47" column="16" selection-start-line="47" selection-start-column="16" selection-end-line="47" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/raft/config.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="909">
-          <caret line="287" selection-start-line="287" selection-end-line="287" />
+        <state relative-caret-position="292">
+          <caret line="268" column="17" lean-forward="true" selection-start-line="268" selection-start-column="17" selection-end-line="268" selection-end-column="17" />
           <folding>
             <element signature="e#230#406#0" expanded="true" />
           </folding>
@@ -731,17 +738,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/raft/test_test.go">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="323">
-          <caret line="47" column="16" selection-start-line="47" selection-start-column="16" selection-end-line="47" selection-end-column="16" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/raft/raft.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="120">
-          <caret line="478" column="44" selection-start-line="478" selection-start-column="44" selection-end-line="478" selection-end-column="44" />
+        <state relative-caret-position="-1552">
+          <caret line="387" column="8" lean-forward="true" selection-start-line="387" selection-start-column="8" selection-end-line="387" selection-end-column="8" />
           <folding>
             <element signature="e#591#678#0" expanded="true" />
           </folding>
