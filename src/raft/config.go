@@ -117,6 +117,7 @@ func (cfg *config) start1(i int) {
 	cfg.endnames[i] = make([]string, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		cfg.endnames[i][j] = randstring(20)
+
 	}
 
 	// a fresh set of ClientEnds.

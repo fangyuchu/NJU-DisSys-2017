@@ -9,6 +9,8 @@ package raft
 //
 
 import (
+	"bytes"
+	"encoding/gob"
 	"testing"
 )
 import "fmt"
@@ -934,41 +936,45 @@ type TestStruct struct {
 	data int
 }
 
-func TestEncode(t *testing.T) {
-	//检查通信
-	servers := 3
-	cfg := make_config(t, servers, false)
-	defer cfg.cleanup()
+func testPrint(i int, r *int) {
+	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	fmt.Println(i)
+	*r = i
+}
 
-	fmt.Printf("Test: initial election ...\n")
-	var rv = RequestVoteArgs{}
-	var rvr = RequestVoteReply{100, false}
-	// is a leader elected?
-	time.Sleep(500 * time.Millisecond)
-	go cfg.rafts[1].sendRequestVote(0, rv, &rvr)
-	time.Sleep(500 * time.Millisecond)
-	fmt.Println(rvr.voteGranted)
+func TestEncode(t *testing.T) {
+	//测试多线程
+	//var b [10]int
+	//for i:=0;i<10;i++{
+	//	go testPrint(i,&b[i])
+	//
+	//}
+	//time.Sleep(10*time.Second)
+	//fmt.Println(b)
+	////检查通信
+	//有问题 不能用
+	//servers := 3
+	//cfg := make_config(t, servers, false)
+	//defer cfg.cleanup()
+	//
+	//fmt.Printf("Test: initial election ...\n")
+	//var rv = RequestVoteArgs{}
+	//var rvr = RequestVoteReply{100, false}
+	//// is a leader elected?
+	//time.Sleep(500 * time.Millisecond)
+	//go cfg.rafts[1].sendRequestVote(0, rv, &rvr)
+	//time.Sleep(500 * time.Millisecond)
+	//fmt.Println(rvr.voteGranted)
 
 	//encode和decode的测试
-	//w := new(bytes.Buffer)
-	//e := gob.NewEncoder(w)
-	//var balance = [5]float32{1000.0, 2.0, 3.4, 7.0, 50.0}
-	//fmt.Println(len(balance))
-	//e.Encode(balance[0])
-	//e.Encode(balance[1])
-	//e.Encode("s")
-	//e.Encode(3)
-	//r := bytes.NewBuffer(w.Bytes())
-	//d := gob.NewDecoder(r)
-	//const num=5
-	//var a [num]float32
-	//var b string
-	//var c int
-	//
-	//d.Decode(&a[0])
-	//d.Decode(&a[1])
-	//d.Decode(&b)
-	//d.Decode(&c)
+	//save()
+	//read()
+
+	a := make(chan int, 5)
+	go w(a)
+	for i := 0; i < 5; i++ {
+		fmt.Println(<-a)
+	}
 
 	//切片测试
 	//	var a []int
@@ -1000,6 +1006,31 @@ func TestEncode(t *testing.T) {
 	//	fmt.Println(a.data)
 }
 
-//func s(test *TestStruct)  {
-//	test.data=100
-//}
+func save() {
+	w := new(bytes.Buffer)
+	e := gob.NewEncoder(w)
+	var balance [5]*TestStruct
+	for i := 0; i < 5; i++ {
+		a := TestStruct{i}
+		balance[i] = &a
+	}
+	for i := 0; i < 5; i++ {
+		e.Encode(balance)
+	}
+}
+func read() {
+	w := new(bytes.Buffer)
+	r := bytes.NewBuffer(w.Bytes())
+	d := gob.NewDecoder(r)
+	var a1 [5]*int
+	d.Decode(&a1)
+	fmt.Println(a1[2])
+}
+func w(a chan int) {
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Second)
+		a <- i
+
+	}
+
+}
