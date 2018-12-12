@@ -970,11 +970,17 @@ func TestEncode(t *testing.T) {
 	//save()
 	//read()
 
-	a := make(chan int, 5)
-	go w(a)
-	for i := 0; i < 5; i++ {
-		fmt.Println(<-a)
-	}
+	//a := make(chan int, 5)
+	//go w(a)
+	//for i := 0; i < 5; i++ {
+	//	fmt.Println(<-a)
+	//}
+
+	var a []*int
+	a = make([]*int, 2)
+	*a[0] = 1
+	*a[1] = 2
+	//*b=*a
 
 	//切片测试
 	//	var a []int
