@@ -62,13 +62,14 @@ type Raft struct {
 	CommitIndex int
 	LastApplied int
 	//volatile state on leaders
-	NextIndex         []*int
-	MatchIndex        []*int
+	NextIndex         []int
+	MatchIndex        []int
 	CommandFromClient chan interface{}
 	//modified state
 	ReqFromLeader    chan bool //是否收到leader的定时消息
 	VoteResultComing chan bool //选举结果是否出来
 	Voted            chan bool //设置容量大小为numpeers，通道中有消息表示有得到投票
+	ApplyMSG         chan ApplyMsg
 	/******************************************************************************************************************/
 
 	// Your data here.
@@ -305,13 +306,26 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 		reply.Term = rf.CurrentTerm
 		return
 	}
-	fmt.Println(rf.me, "处理了", args.LeaderID, "的包")
 	if rf.Identity == 1 { //在竞选时发现合法leader发来的包，就自动退回成follower
 		rf.VoteResultComing <- true
 		rf.BecomeFollower()
 	}
+	//根据leader发来的commitIndex更新自己的index
+	if args.LeaderCommit > rf.CommitIndex {
+		if args.LeaderCommit < len(rf.Log)-1 {
+			rf.CommitIndex = args.LeaderCommit
+			fmt.Println(rf.me, "更新自己的commitIndex为", rf.CommitIndex)
+
+		} else {
+			rf.CommitIndex = len(rf.Log) - 1
+			fmt.Println(rf.me, "更新自己的commitIndex为", rf.CommitIndex)
+		}
+		var temp []byte
+		rf.ApplyMSG <- ApplyMsg{rf.CommitIndex, rf.Log[rf.CommitIndex].Command, false, temp}
+	}
 	if args.Log == nil {
 		//心跳包
+		//fmt.Println(rf.me, "处理了", args.LeaderID, "的心跳包")
 		reply.Success = 2
 		return
 	} else if args.PrevLogIndex > len(rf.Log)-1 || rf.Log[args.PrevLogIndex].Term != args.PrevLogTerm {
@@ -325,13 +339,7 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 	for i := 0; i < len(args.Log); i++ {
 		rf.Log = append(rf.Log, args.Log[i])
 	}
-	if args.LeaderCommit > rf.CommitIndex {
-		if args.LeaderCommit < len(rf.Log)-1 {
-			rf.CommitIndex = args.LeaderCommit
-		} else {
-			rf.CommitIndex = len(rf.Log) - 1
-		}
-	}
+	fmt.Println(rf.me, "处理了", args.LeaderID, "的消息")
 	reply.Success = 2
 	return
 
@@ -354,7 +362,9 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	Index := len(rf.Log)
 	Term := rf.CurrentTerm
 	isLeader := rf.Identity == 2
-	rf.CommandFromClient <- command
+	if rf.Identity == 2 {
+		rf.CommandFromClient <- command
+	}
 	return Index, Term, isLeader
 }
 
@@ -395,8 +405,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.ReqFromLeader = make(chan bool, 1)
 	rf.VoteResultComing = make(chan bool, 1)
 	rf.Voted = make(chan bool, len(peers))
-	rf.CommandFromClient = nil
-	go rf.startWorking()
+	rf.ApplyMSG = applyCh
+	go rf.startWorking(applyCh)
 	// Your initialization code here.
 
 	// initialize from state persisted before a crash
@@ -408,7 +418,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 /******************************************************************************************************************/
 func (rf *Raft) startElect() {
-	rf.CurrentTerm += 1 //Term+1
 	randNum := rand.Intn(150)
 	electionTimeout := time.Duration(randNum+150) * time.Millisecond
 	var numPeers int
@@ -467,14 +476,20 @@ func (rf *Raft) checkIFElected(reply []RequestVoteReply, numPeers int) {
 }
 
 func (rf *Raft) DoAsLeader() {
-	//接受客户的请求，超时则发心跳包
-	select {
-	case Command := <-rf.CommandFromClient:
-		rf.Log = append(rf.Log, &Entry{len(rf.Log), rf.CurrentTerm, Command})
-	case <-time.After(50 * time.Millisecond):
-		//需要发心跳包
-	}
+	defer func() { //防止由Leader转为Follower时的重复关闭通道的情况
+		if err := recover(); err != nil {
+			if rf.Identity != 2 {
+				return
+			} else {
+				fmt.Println(err)
+			}
+		}
+	}()
 	//准备发给server的各自的包
+	//if rf.Identity!=2{
+	//	//中途发现自己不是leader了
+	//	return
+	//}
 	numPeers := len(rf.peers)
 	reply := make([]AppendEntriesReply, len(rf.peers))
 	args := make([]AppendEntries, len(rf.peers))
@@ -484,15 +499,17 @@ func (rf *Raft) DoAsLeader() {
 		}
 		currentTerm := rf.CurrentTerm
 		leaderId := rf.me
-		prevLogIndex := *rf.NextIndex[server] - 1 //这个server需要发的包的前一个包在log中的索引
-		prevLogTerm := rf.Log[prevLogIndex].Term  //上述这个包的term
-		var l []*Entry
-		if *rf.NextIndex[server] > len(rf.Log) {
-			l = nil //这个server已经有leader所有的log了，发心跳包就可以
-		} else {
-			l = rf.Log[*rf.NextIndex[server]:] //需要复制给该server的log
-		}
+		prevLogIndex := rf.NextIndex[server] - 1 //这个server需要发的包的前一个包在log中的索引
+		prevLogTerm := rf.Log[prevLogIndex].Term //上述这个包的term
 		leaderCommit := rf.CommitIndex
+		var l []*Entry
+		if rf.NextIndex[server] > len(rf.Log) {
+			l = nil //这个server已经有leader所有的log了，发心跳包就可以
+			fmt.Println("leader", rf.me, "要给", server, "发心跳包")
+		} else {
+			l = rf.Log[rf.NextIndex[server]:] //需要复制给该server的log
+			fmt.Println("leader", rf.me, "要给", server, "发内容")
+		}
 		args[server] = AppendEntries{currentTerm, leaderId, prevLogIndex,
 			prevLogTerm, l, leaderCommit, make(chan bool, 1)}
 	}
@@ -512,26 +529,35 @@ func (rf *Raft) DoAsLeader() {
 			var success bool
 			select {
 			case success = <-args[i].Success:
+				if rf.Identity != 2 {
+					//中途发现自己不是leader了
+					return
+				}
 				if success == false {
 					//false有两种情况，一种是发给server的log太新，需要把之前的也发给它；第二种是server的term更大，leader需要退回follower
-					//发给follower的包不合适，把针对它的索引减1
-					*rf.NextIndex[i]--
 					//有follower的term更大，leader退回到follower状态
 					if reply[i].Term > rf.CurrentTerm {
 						fmt.Println("leader", rf.me, "发现自己的term过小，退回到follower")
 						rf.CurrentTerm = reply[i].Term
 						rf.BecomeFollower()
+						return
 					}
+					//发给follower的包不合适，把针对它的索引减1
+					rf.NextIndex[i] = rf.NextIndex[i] - 1
 				} else {
 					//log被成功复制到该server，更新针对这个server的索引
-					*rf.MatchIndex[i] = *rf.NextIndex[i] + len(args[i].Log) - 1
-					*rf.NextIndex[i] = *rf.MatchIndex[i] + 1
+					rf.MatchIndex[i] = rf.NextIndex[i] + len(args[i].Log) - 1
+					rf.NextIndex[i] = rf.MatchIndex[i] + 1
 				}
 
 			case <-time.After(25 * time.Millisecond):
 				//一段时间后没有收到回复，默认重新发这些包给这个server
 			}
 		}(server)
+	}
+	if rf.Identity != 2 {
+		//中途发现自己不是leader了
+		return
 	}
 	//检查被大多数server复制好的包中，谁的index最大
 	maxIndex := make([]int, numPeers)
@@ -540,7 +566,7 @@ func (rf *Raft) DoAsLeader() {
 		if server == rf.me {
 			maxIndex[server] = -(len(rf.Log) - 1)
 		} else {
-			maxIndex[server] = -*rf.MatchIndex[server]
+			maxIndex[server] = -rf.MatchIndex[server]
 		}
 	}
 	sort.Ints(maxIndex)
@@ -548,78 +574,31 @@ func (rf *Raft) DoAsLeader() {
 	for server := 0; server < numPeers; server++ {
 		sum += 1
 		if sum >= (int)(numPeers/2) {
-			rf.CommitIndex = -maxIndex[server]
+			if rf.CommitIndex != -maxIndex[server] {
+				rf.CommitIndex = -maxIndex[server]
+				fmt.Println("leader", rf.me, "更新commitIndex为", rf.CommitIndex)
+				var temp []byte
+				rf.ApplyMSG <- ApplyMsg{rf.CommitIndex, rf.Log[rf.CommitIndex].Command, false, temp}
+			}
+			break
 		}
 	}
-
-	////TODO:这样似乎一次只能给所有的服务器发送相同的指令？
-	//var agreeNum int //num of servers agreed to append the entry
-	//mostAgreed := make(chan bool)
-	//numPeers := len(rf.peers)
-	//reply := make([]AppendEntriesReply, len(rf.peers))
-	//args := make([]AppendEntries, len(rf.peers))
-	//for server := 0; server < numPeers; server++ {
-	//	//TODO: same request for all server
-	//	currentTerm := rf.CurrentTerm
-	//	leaderId := rf.me
-	//	prevLogIndex := rf.Log[len(rf.Log)-1].Index
-	//	prevLogTerm := rf.Log[len(rf.Log)-1].Term
-	//	var l []*Entry
-	//	l = nil//备忘，这个log改成每个服务器是哪个就可以了
-	//	leaderCommit := rf.CommitIndex
-	//	args[server] = AppendEntries{currentTerm, leaderId, prevLogIndex,
-	//		prevLogTerm, l, leaderCommit, make(chan bool, 1)}
-	//}
-	//for server := 0; server < numPeers; server++ {
-	//	if server == rf.me {
-	//		continue
-	//	}
-	//	go rf.sendRequestReply(server, args[server], &reply[server])
-	//}
-	//for server := 0; server < numPeers; server++ {
-	//	if server == rf.me {
-	//		continue
-	//	}
-	//	go func(i int) {
-	//		var success bool
-	//		select {
-	//		case success = <-args[i].Success:
-	//			if success == false {
-	//				//有follower的term更大，leader退回到follower状态
-	//				//TODO:一个server被隔绝后疯狂加term，之后恢复了，这时怎么办？
-	//				fmt.Println("leader", rf.me, "发现自己的term过小，退回到follower")
-	//				rf.CurrentTerm = reply[i].Term
-	//				rf.BecomeFollower()
-	//				mostAgreed <- false
-	//			} else {
-	//				agreeNum++
-	//			}
-	//			if agreeNum >= (int)(numPeers/2) {
-	//				mostAgreed <- true
-	//			}
-	//		case <-time.After(25 * time.Millisecond):
-	//		}
-	//	}(server)
-	//}
-	//select {
-	//case commitEntry := <-mostAgreed:
-	//	if commitEntry {
-	//		//TODO:commit entry
-	//	} else {
-	//		//TODO: do not commit the entry
-	//	}
-	//case <-time.After(1 * time.Second):
-	//	//长时间未收到大多数服务器的消息
-	//	return
-	//}
 }
 
-func (rf *Raft) startWorking() {
+func (rf *Raft) startWorking(applyCh chan ApplyMsg) {
 	for true {
 		if rf.Identity == 2 {
-			//leader，发心跳包
+			//leader，发包
 			//暂定50ms发送一次
+			//接受客户的请求，超时则发心跳包
 			go rf.DoAsLeader()
+			select {
+			case Command := <-rf.CommandFromClient:
+				fmt.Println("leader", rf.me, "收到client发来的请求")
+				rf.Log = append(rf.Log, &Entry{len(rf.Log), rf.CurrentTerm, Command})
+			case <-time.After(50 * time.Millisecond):
+				//需要发心跳包
+			}
 
 		} else if rf.Identity == 1 {
 			//candidate,竞选
@@ -648,6 +627,7 @@ func (rf *Raft) BecomeFollower() {
 		}
 	}()
 	close(rf.Voted)
+	close(rf.CommandFromClient)
 }
 func (rf *Raft) BecomeLeader() {
 	rf.Identity = 2
@@ -655,10 +635,14 @@ func (rf *Raft) BecomeLeader() {
 	rf.CommandFromClient = make(chan interface{}, 60000) //需要设置成无限大
 	for i := 0; i < len(rf.peers); i++ {
 		nextInd := rf.Log[len(rf.Log)-1].Index + 1
-		matchInd := 0
-		rf.NextIndex = append(rf.NextIndex, &nextInd)
-		rf.MatchIndex = append(rf.MatchIndex, &matchInd)
+		rf.NextIndex = append(rf.NextIndex, nextInd)
+		rf.MatchIndex = append(rf.MatchIndex, 0)
 	}
+	defer func() { //test
+		if err := recover(); err != nil {
+			print()
+		}
+	}()
 	close(rf.Voted)
 }
 func (rf *Raft) BecomeCandidate() {
@@ -666,5 +650,6 @@ func (rf *Raft) BecomeCandidate() {
 	rf.Votedfor = -1
 	rf.NextIndex = nil
 	rf.MatchIndex = nil
+	rf.CurrentTerm += 1 //Term+1
 	rf.Voted = make(chan bool, len(rf.peers))
 }
