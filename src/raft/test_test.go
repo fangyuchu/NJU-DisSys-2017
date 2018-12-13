@@ -967,20 +967,28 @@ func TestEncode(t *testing.T) {
 	//fmt.Println(rvr.voteGranted)
 
 	//encode和decode的测试
-	//save()
-	//read()
-
+	//w := new(bytes.Buffer)
+	//e := gob.NewEncoder(w)
+	//var balance [5]int
+	//for i := 0; i < 5; i++ {
+	//	balance[i] = i
+	//}
+	//e.Encode(balance)
+	//
+	//r := bytes.NewBuffer(w.Bytes())
+	//d := gob.NewDecoder(r)
+	//var a1 [5]int
+	//d.Decode(&a1)
+	//fmt.Println(a1)
+	var a []int
+	a = append(a, 1)
+	a = append(a, 1)
+	fmt.Println(a[1:])
 	//a := make(chan int, 5)
 	//go w(a)
 	//for i := 0; i < 5; i++ {
 	//	fmt.Println(<-a)
 	//}
-
-	var a []*int
-	a = make([]*int, 2)
-	*a[0] = 1
-	*a[1] = 2
-	//*b=*a
 
 	//切片测试
 	//	var a []int
@@ -1015,22 +1023,21 @@ func TestEncode(t *testing.T) {
 func save() {
 	w := new(bytes.Buffer)
 	e := gob.NewEncoder(w)
-	var balance [5]*TestStruct
+	var balance [5]int
 	for i := 0; i < 5; i++ {
-		a := TestStruct{i}
-		balance[i] = &a
+		balance[i] = i
 	}
-	for i := 0; i < 5; i++ {
-		e.Encode(balance)
-	}
+	e.Encode(5)
+
 }
 func read() {
 	w := new(bytes.Buffer)
 	r := bytes.NewBuffer(w.Bytes())
 	d := gob.NewDecoder(r)
-	var a1 [5]*int
-	d.Decode(&a1)
-	fmt.Println(a1[2])
+	//var a1 [5]int
+	var b int
+	fmt.Println(d.Decode(&b))
+	fmt.Println(b)
 }
 func w(a chan int) {
 	for i := 0; i < 5; i++ {

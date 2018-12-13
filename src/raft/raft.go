@@ -56,7 +56,7 @@ type Raft struct {
 	//persistent state
 	CurrentTerm int
 	Votedfor    int //-1表示未投票
-	Log         []*Entry
+	Log         []Entry
 	Identity    int //0表示follower，1表示candidate，2表示leader
 	//volatile state on all servers
 	CommitIndex int
@@ -116,7 +116,7 @@ type AppendEntries struct {
 	LeaderID     int
 	PrevLogIndex int
 	PrevLogTerm  int
-	Log          []*Entry
+	Log          []Entry
 	LeaderCommit int
 	Success      chan bool //收到表示得到server回复，其中true表示server接收了，false表示server拒绝了
 }
@@ -195,7 +195,7 @@ func (rf *Raft) readPersist(data []byte) {
 		d.Decode(Term)
 		d.Decode(Index)
 		d.Decode(Command)
-		rf.Log = append(rf.Log, &Entry{Term: Term, Index: Index, Command: Command})
+		rf.Log = append(rf.Log, Entry{Term: Term, Index: Index, Command: Command})
 	}
 
 	/******************************************************************************************************************/
@@ -301,7 +301,7 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 	}
 	if args.Term < rf.CurrentTerm {
 		//leader的term小，拒绝
-		fmt.Println(rf.me, "的term为", rf.CurrentTerm, "，因此拒绝了", args.LeaderID, "的term为", args.Term, "的心跳包")
+		fmt.Println(rf.me, "的term为", rf.CurrentTerm, "，因此拒绝了", args.LeaderID, "的term为", args.Term, "的包")
 		reply.Success = 1
 		reply.Term = rf.CurrentTerm
 		return
@@ -312,6 +312,7 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 	}
 	//根据leader发来的commitIndex更新自己的index
 	if args.LeaderCommit > rf.CommitIndex {
+		oldCommitIndex := rf.CommitIndex
 		if args.LeaderCommit < len(rf.Log)-1 {
 			rf.CommitIndex = args.LeaderCommit
 			fmt.Println(rf.me, "更新自己的commitIndex为", rf.CommitIndex)
@@ -320,8 +321,12 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 			rf.CommitIndex = len(rf.Log) - 1
 			fmt.Println(rf.me, "更新自己的commitIndex为", rf.CommitIndex)
 		}
-		var temp []byte
-		rf.ApplyMSG <- ApplyMsg{rf.CommitIndex, rf.Log[rf.CommitIndex].Command, false, temp}
+		for i := oldCommitIndex; i <= rf.CommitIndex; i++ {
+			if oldCommitIndex == rf.CommitIndex {
+				break
+			}
+			rf.ApplyMSG <- ApplyMsg{Index: i, Command: rf.Log[i].Command}
+		}
 	}
 	if args.Log == nil {
 		//心跳包
@@ -330,6 +335,7 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 		return
 	} else if args.PrevLogIndex > len(rf.Log)-1 || rf.Log[args.PrevLogIndex].Term != args.PrevLogTerm {
 		//Reply false if log doesn't contain an entry at prevLogIndex whose term matches prevLogTerm
+		fmt.Println(rf.me, "拒绝了leader", args.LeaderID, "发来的包，此时leader发来的term：", args.PrevLogTerm, "index为", args.PrevLogIndex, "而本身index为", len(rf.Log)-1)
 		reply.Success = 1
 		return
 	}
@@ -339,7 +345,7 @@ func (rf *Raft) Reply(args AppendEntries, reply *AppendEntriesReply) {
 	for i := 0; i < len(args.Log); i++ {
 		rf.Log = append(rf.Log, args.Log[i])
 	}
-	fmt.Println(rf.me, "处理了", args.LeaderID, "的消息")
+	fmt.Println(rf.me, "接受了", args.LeaderID, "的", len(args.Log), "个包")
 	reply.Success = 2
 	return
 
@@ -398,7 +404,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.Identity = 0 //开始时都是candidate
 	rf.CurrentTerm = 0
 	rf.Votedfor = -1
-	rf.Log = append(rf.Log, &Entry{0, 0, "start"})
+	//TODO:初始化的时候，log长度为0，选举时的lastLogIndex和term写什么？
+	rf.Log = append(rf.Log, Entry{0, 0, 0})
 	rf.NextIndex = nil
 	rf.MatchIndex = nil
 	rf.readPersist(persister.ReadRaftState())
@@ -406,7 +413,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.VoteResultComing = make(chan bool, 1)
 	rf.Voted = make(chan bool, len(peers))
 	rf.ApplyMSG = applyCh
-	go rf.startWorking(applyCh)
+	go rf.startWorking()
 	// Your initialization code here.
 
 	// initialize from state persisted before a crash
@@ -481,15 +488,12 @@ func (rf *Raft) DoAsLeader() {
 			if rf.Identity != 2 {
 				return
 			} else {
+				fmt.Println("-----------------------------------------------------------------------")
 				fmt.Println(err)
+				fmt.Println("-----------------------------------------------------------------------")
 			}
 		}
 	}()
-	//准备发给server的各自的包
-	//if rf.Identity!=2{
-	//	//中途发现自己不是leader了
-	//	return
-	//}
 	numPeers := len(rf.peers)
 	reply := make([]AppendEntriesReply, len(rf.peers))
 	args := make([]AppendEntries, len(rf.peers))
@@ -502,13 +506,13 @@ func (rf *Raft) DoAsLeader() {
 		prevLogIndex := rf.NextIndex[server] - 1 //这个server需要发的包的前一个包在log中的索引
 		prevLogTerm := rf.Log[prevLogIndex].Term //上述这个包的term
 		leaderCommit := rf.CommitIndex
-		var l []*Entry
-		if rf.NextIndex[server] > len(rf.Log) {
+		var l []Entry
+		if rf.NextIndex[server] > len(rf.Log)-1 {
 			l = nil //这个server已经有leader所有的log了，发心跳包就可以
-			fmt.Println("leader", rf.me, "要给", server, "发心跳包")
+			//fmt.Println("leader", rf.me, "要给", server, "发心跳包")
 		} else {
 			l = rf.Log[rf.NextIndex[server]:] //需要复制给该server的log
-			fmt.Println("leader", rf.me, "要给", server, "发内容")
+			fmt.Println("leader", rf.me, "给", server, "发", len(l), "个包")
 		}
 		args[server] = AppendEntries{currentTerm, leaderId, prevLogIndex,
 			prevLogTerm, l, leaderCommit, make(chan bool, 1)}
@@ -574,18 +578,20 @@ func (rf *Raft) DoAsLeader() {
 	for server := 0; server < numPeers; server++ {
 		sum += 1
 		if sum >= (int)(numPeers/2) {
-			if rf.CommitIndex != -maxIndex[server] {
+			if rf.CommitIndex < -maxIndex[server] {
+				oldCommitIndex := rf.CommitIndex
 				rf.CommitIndex = -maxIndex[server]
 				fmt.Println("leader", rf.me, "更新commitIndex为", rf.CommitIndex)
-				var temp []byte
-				rf.ApplyMSG <- ApplyMsg{rf.CommitIndex, rf.Log[rf.CommitIndex].Command, false, temp}
+				for i := oldCommitIndex; i <= rf.CommitIndex; i++ {
+					rf.ApplyMSG <- ApplyMsg{Index: i, Command: rf.Log[i].Command}
+				}
 			}
 			break
 		}
 	}
 }
 
-func (rf *Raft) startWorking(applyCh chan ApplyMsg) {
+func (rf *Raft) startWorking() {
 	for true {
 		if rf.Identity == 2 {
 			//leader，发包
@@ -595,7 +601,7 @@ func (rf *Raft) startWorking(applyCh chan ApplyMsg) {
 			select {
 			case Command := <-rf.CommandFromClient:
 				fmt.Println("leader", rf.me, "收到client发来的请求")
-				rf.Log = append(rf.Log, &Entry{len(rf.Log), rf.CurrentTerm, Command})
+				rf.Log = append(rf.Log, Entry{len(rf.Log), rf.CurrentTerm, Command})
 			case <-time.After(50 * time.Millisecond):
 				//需要发心跳包
 			}
