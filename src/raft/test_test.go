@@ -967,23 +967,23 @@ func TestEncode(t *testing.T) {
 	//fmt.Println(rvr.voteGranted)
 
 	//encode和decode的测试
-	//w := new(bytes.Buffer)
-	//e := gob.NewEncoder(w)
-	//var balance [5]int
-	//for i := 0; i < 5; i++ {
-	//	balance[i] = i
-	//}
-	//e.Encode(balance)
-	//
-	//r := bytes.NewBuffer(w.Bytes())
-	//d := gob.NewDecoder(r)
-	//var a1 [5]int
-	//d.Decode(&a1)
-	//fmt.Println(a1)
+	w := new(bytes.Buffer)
+	e := gob.NewEncoder(w)
 	var a []int
-	a = append(a, 1)
-	a = append(a, 1)
-	fmt.Println(a[1:])
+	a = nil
+	e.Encode(a)
+
+	r := bytes.NewBuffer(w.Bytes())
+	d := gob.NewDecoder(r)
+	var b []int
+	d.Decode(&b)
+	fmt.Println()
+	//fmt.Println(a1)
+	//var a []int
+	//fmt.Println(a[0:2])
+	//a = append(a, 1)
+	//a = append(a, 1)
+	//fmt.Println(a[len(a)-1])
 	//a := make(chan int, 5)
 	//go w(a)
 	//for i := 0; i < 5; i++ {
